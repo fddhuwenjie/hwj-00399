@@ -29,6 +29,7 @@ async function findRecommendedSpace(
     }
   }
 
+  const hasTypePreference = typePreference && typePreference !== 'all';
   let targetFloor = floor ? Number(floor) : null;
   let elevator: ElevatorPosition | null = null;
   let allSpaces: ParkingSpace[] = [];
@@ -38,23 +39,29 @@ async function findRecommendedSpace(
       SELECT * FROM elevator_positions WHERE floor = ? LIMIT 1
     `, [targetFloor]) || null;
 
+    const typeCondition = hasTypePreference ? 'AND type = ?' : '';
+    const params = hasTypePreference ? [targetFloor, typePreference] : [targetFloor];
+
     allSpaces = await all<ParkingSpace>(`
       SELECT * FROM parking_spaces 
-      WHERE floor = ? AND status = 'available'
+      WHERE floor = ? AND status = 'available' ${typeCondition}
       ORDER BY row, col
-    `, [targetFloor]);
+    `, params);
   } else {
     const config = await get<{ floors: number }>('SELECT floors FROM parking_config WHERE id = 1');
     if (!config) {
       return { success: false, message: '系统配置错误', code: 500 };
     }
 
+    const typeCondition = hasTypePreference ? 'AND type = ?' : '';
+
     for (let f = 1; f <= config.floors; f++) {
+      const params = hasTypePreference ? [f, typePreference] : [f];
       const spaces = await all<ParkingSpace>(`
         SELECT * FROM parking_spaces 
-        WHERE floor = ? AND status = 'available'
+        WHERE floor = ? AND status = 'available' ${typeCondition}
         ORDER BY row, col
-      `, [f]);
+      `, params);
 
       if (spaces.length > 0) {
         allSpaces = spaces;
@@ -72,17 +79,15 @@ async function findRecommendedSpace(
   }
 
   if (allSpaces.length === 0) {
-    return { success: false, message: '没有空闲车位', code: 400 };
+    const typeName = hasTypePreference ? typePreference : '';
+    return { 
+      success: false, 
+      message: hasTypePreference ? `没有${typeName}类型的空闲车位` : '没有空闲车位', 
+      code: 400 
+    };
   }
 
-  let candidateSpaces = [...allSpaces];
-
-  if (typePreference && typePreference !== 'all') {
-    const preferredSpaces = candidateSpaces.filter(s => s.type === typePreference);
-    if (preferredSpaces.length > 0) {
-      candidateSpaces = preferredSpaces;
-    }
-  }
+  const candidateSpaces = [...allSpaces];
 
   const spacesWithDistance = candidateSpaces.map(space => ({
     ...space,
