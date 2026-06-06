@@ -11,13 +11,36 @@ import {
   Tag,
   Statistic,
   Space,
-  message
+  message,
+  Input,
+  Form,
+  Alert,
+  Steps,
+  Result
 } from 'antd';
-import { CarOutlined, EnvironmentOutlined, InfoCircleOutlined } from '@ant-design/icons';
-import { configApi, spaceApi, recordApi } from '../services/api';
-import type { ParkingConfig, ParkingSpace, ParkingRecord, SpaceType, SpaceStatus } from '../types';
+import {
+  CarOutlined,
+  EnvironmentOutlined,
+  InfoCircleOutlined,
+  ArrowRightOutlined,
+  CheckCircleOutlined,
+  HistoryOutlined,
+  ThunderboltOutlined
+} from '@ant-design/icons';
+import { configApi, spaceApi, recordApi, guidanceApi } from '../services/api';
+import type {
+  ParkingConfig,
+  ParkingSpace,
+  ParkingRecord,
+  SpaceType,
+  SpaceStatus,
+  GuidanceResult,
+  Member
+} from '../types';
 
 const { Option } = Select;
+const { Step } = Steps;
+const { Search } = Input;
 
 const spaceTypeLabels: Record<SpaceType, string> = {
   normal: '普通',
@@ -38,6 +61,13 @@ const spaceStatusColors: Record<SpaceStatus, string> = {
   reserved: 'warning'
 };
 
+const typePreferenceOptions = [
+  { value: 'all', label: '无偏好' },
+  { value: 'charging', label: '优先充电桩' },
+  { value: 'vip', label: '优先VIP车位' },
+  { value: 'disabled', label: '优先残疾人车位' }
+];
+
 const ParkingMap: React.FC = () => {
   const [config, setConfig] = useState<ParkingConfig | null>(null);
   const [spaces, setSpaces] = useState<ParkingSpace[]>([]);
@@ -47,6 +77,22 @@ const ParkingMap: React.FC = () => {
   const [selectedSpace, setSelectedSpace] = useState<ParkingSpace | null>(null);
   const [parkingRecord, setParkingRecord] = useState<ParkingRecord | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
+
+  const [guidanceModalVisible, setGuidanceModalVisible] = useState(false);
+  const [guidanceLoading, setGuidanceLoading] = useState(false);
+  const [guidanceResult, setGuidanceResult] = useState<GuidanceResult | null>(null);
+  const [typePreference, setTypePreference] = useState('all');
+  const [entryPlateNo, setEntryPlateNo] = useState('');
+  const [entryStep, setEntryStep] = useState(0);
+  const [guidanceForm] = Form.useForm();
+  const [entryResult, setEntryResult] = useState<{
+    record: ParkingRecord;
+    member?: Member;
+    guidance: GuidanceResult;
+  } | null>(null);
+
+  const [highlightPath, setHighlightPath] = useState<Set<string>>(new Set());
+  const [recommendedSpaceId, setRecommendedSpaceId] = useState<number | null>(null);
 
   useEffect(() => {
     fetchConfig();
@@ -128,6 +174,94 @@ const ParkingMap: React.FC = () => {
     }
   };
 
+  const handleRecommendSpace = async () => {
+    try {
+      setGuidanceLoading(true);
+      const res = await guidanceApi.recommend({
+        plateNo: entryPlateNo || undefined,
+        typePreference: typePreference === 'all' ? undefined : typePreference
+      });
+
+      if (res.success && res.data) {
+        setGuidanceResult(res.data);
+        setCurrentFloor(res.data.floor);
+
+        const pathSet = new Set(res.data.path.map(p => `${p.row}-${p.col}`));
+        setHighlightPath(pathSet);
+        setRecommendedSpaceId(res.data.space.id);
+
+        setTimeout(() => {
+          fetchSpaces();
+        }, 100);
+
+        setEntryStep(1);
+        message.success(`已为您推荐最优车位：${res.data.spaceNo}`);
+      }
+    } catch (error: any) {
+      message.error(error.response?.data?.message || '获取推荐车位失败');
+    } finally {
+      setGuidanceLoading(false);
+    }
+  };
+
+  const handleConfirmEntry = async () => {
+    if (!guidanceResult) return;
+
+    try {
+      setGuidanceLoading(true);
+      const res = await guidanceApi.entry({
+        plateNo: entryPlateNo || undefined,
+        spaceId: guidanceResult.space.id,
+        typePreference: typePreference === 'all' ? undefined : typePreference,
+        manual: !!entryPlateNo
+      });
+
+      if (res.success && res.data) {
+        setEntryResult(res.data);
+        setEntryStep(2);
+        message.success('车辆入场成功！');
+        setTimeout(() => {
+          fetchSpaces();
+        }, 100);
+      }
+    } catch (error: any) {
+      message.error(error.response?.data?.message || '入场失败');
+    } finally {
+      setGuidanceLoading(false);
+    }
+  };
+
+  const handleShowPath = async (space: ParkingSpace) => {
+    try {
+      const res = await guidanceApi.getPath(space.id);
+      if (res.success && res.data) {
+        const pathSet = new Set(res.data.path.map(p => `${p.row}-${p.col}`));
+        setHighlightPath(pathSet);
+        setRecommendedSpaceId(space.id);
+        setCurrentFloor(space.floor);
+        message.info(`已显示前往 ${space.spaceNo} 的路线`);
+      }
+    } catch (error) {
+      message.error('获取路线失败');
+    }
+  };
+
+  const clearHighlight = () => {
+    setHighlightPath(new Set());
+    setRecommendedSpaceId(null);
+  };
+
+  const resetGuidance = () => {
+    setGuidanceModalVisible(false);
+    setGuidanceResult(null);
+    setEntryStep(0);
+    setEntryResult(null);
+    setEntryPlateNo('');
+    setTypePreference('all');
+    clearHighlight();
+    guidanceForm.resetFields();
+  };
+
   const getSpaceItemStyle = (space: ParkingSpace) => {
     return {
       gridColumn: space.col + 1,
@@ -135,21 +269,181 @@ const ParkingMap: React.FC = () => {
     };
   };
 
-  const renderFloorButtons = () => {
-    if (!config) return null;
-    const buttons = [];
-    for (let i = 1; i <= config.floors; i++) {
-      buttons.push(
-        <Button
-          key={i}
-          type={currentFloor === i ? 'primary' : 'default'}
-          onClick={() => setCurrentFloor(i)}
-        >
-          {i}层
-        </Button>
+  const isPathCell = (row: number, col: number) => {
+    return highlightPath.has(`${row}-${col}`);
+  };
+
+  const isRecommendedSpace = (spaceId: number) => {
+    return recommendedSpaceId === spaceId;
+  };
+
+  const getSpaceClass = (space: ParkingSpace) => {
+    let classes = `space-item space-${space.status} space-${space.type}`;
+    if (isRecommendedSpace(space.id)) {
+      classes += ' space-recommended';
+    }
+    return classes;
+  };
+
+  const renderGuidanceSteps = () => {
+    if (entryStep === 0) {
+      return (
+        <div>
+          <Alert
+            message="智能车位引导"
+            description="系统将为您推荐距离电梯最近的空闲车位，支持按车位类型偏好筛选"
+            type="info"
+            showIcon
+            style={{ marginBottom: 24 }}
+          />
+          <Form form={guidanceForm} layout="vertical">
+            <Form.Item
+              name="plateNo"
+              label="车牌号（可选，随机生成）"
+            >
+              <Input
+                placeholder="请输入车牌号，不填则随机生成"
+                value={entryPlateNo}
+                onChange={(e) => setEntryPlateNo(e.target.value.toUpperCase())}
+                maxLength={8}
+              />
+            </Form.Item>
+            <Form.Item
+              name="typePreference"
+              label="车位类型偏好"
+              initialValue="all"
+            >
+              <Select value={typePreference} onChange={setTypePreference}>
+                {typePreferenceOptions.map(opt => (
+                  <Option key={opt.value} value={opt.value}>{opt.label}</Option>
+                ))}
+              </Select>
+            </Form.Item>
+            <Form.Item>
+              <Button
+                type="primary"
+                size="large"
+                block
+                icon={<CarOutlined />}
+                onClick={handleRecommendSpace}
+                loading={guidanceLoading}
+              >
+                推荐最优车位
+              </Button>
+            </Form.Item>
+          </Form>
+        </div>
       );
     }
-    return buttons;
+
+    if (entryStep === 1 && guidanceResult) {
+      return (
+        <div>
+          <Result
+            icon={<CheckCircleOutlined style={{ color: '#52c41a' }} />}
+            title="车位推荐成功"
+            subTitle={
+              <div style={{ textAlign: 'left' }}>
+                <Card
+                  style={{
+                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    borderRadius: 12,
+                    border: 'none',
+                    marginBottom: 16
+                  }}
+                  bodyStyle={{ padding: 20 }}
+                >
+                  <Statistic
+                    title={<span style={{ color: 'rgba(255,255,255,0.85)' }}>推荐车位</span>}
+                    value={guidanceResult.spaceNo}
+                    prefix={<EnvironmentOutlined style={{ color: '#fff' }} />}
+                    valueStyle={{ color: '#fff', fontSize: 32, fontWeight: 700 }}
+                  />
+                </Card>
+                <Descriptions column={1} bordered size="small">
+                  <Descriptions.Item label="所在楼层">
+                    <Tag color="blue">B{guidanceResult.floor}层</Tag>
+                  </Descriptions.Item>
+                  <Descriptions.Item label="所在区域">
+                    <Tag color="magenta">{guidanceResult.zone}</Tag>
+                  </Descriptions.Item>
+                  <Descriptions.Item label="车位类型">
+                    <Tag color="cyan">
+                      {spaceTypeLabels[guidanceResult.space.type]}
+                      {guidanceResult.typePreference && <span>（已按偏好推荐）</span>}
+                    </Tag>
+                  </Descriptions.Item>
+                  <Descriptions.Item label="距离电梯">
+                    <span style={{ fontWeight: 600 }}>{guidanceResult.distance} 步</span>
+                  </Descriptions.Item>
+                  <Descriptions.Item label="路线">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span>电梯</span>
+                      <ArrowRightOutlined />
+                      <span>共 {guidanceResult.path.length} 个格子</span>
+                      <ArrowRightOutlined />
+                      <span>车位</span>
+                    </div>
+                  </Descriptions.Item>
+                </Descriptions>
+              </div>
+            }
+          />
+          <Space style={{ width: '100%', justifyContent: 'center' }}>
+            <Button
+              onClick={handleRecommendSpace}
+              icon={<HistoryOutlined />}
+              loading={guidanceLoading}
+            >
+              重新推荐
+            </Button>
+            <Button
+              type="primary"
+              size="large"
+              onClick={handleConfirmEntry}
+              icon={<CheckCircleOutlined />}
+              loading={guidanceLoading}
+            >
+              确认入场
+            </Button>
+          </Space>
+        </div>
+      );
+    }
+
+    if (entryStep === 2 && entryResult) {
+      return (
+        <div>
+          <Result
+            status="success"
+            title="车辆入场成功！"
+            subTitle={
+              <div>
+                <p style={{ fontSize: 16, marginBottom: 16 }}>
+                  车牌号：<span style={{ fontFamily: 'Courier New, monospace', fontWeight: 600, fontSize: 18 }}>{entryResult.record.plateNo}</span>
+                </p>
+                <p>请前往 <Tag color="magenta">{entryResult.guidance.zone}</Tag> <Tag color="blue">{entryResult.guidance.spaceNo}</Tag> 车位停车</p>
+                {entryResult.member && (
+                  <Alert
+                    message={`欢迎回来，${entryResult.member.name}！您是尊贵的会员，本次停车免费。`}
+                    type="success"
+                    showIcon
+                    style={{ marginTop: 16 }}
+                  />
+                )}
+              </div>
+            }
+            extra={[
+              <Button type="primary" key="close" onClick={resetGuidance}>
+                完成
+              </Button>
+            ]}
+          />
+        </div>
+      );
+    }
+
+    return null;
   };
 
   return (
@@ -203,9 +497,9 @@ const ParkingMap: React.FC = () => {
           <Space>
             <span>楼层选择</span>
             <Radio.Group className="space-floor-switch">
-              <Radio.Button value={1} onClick={() => setCurrentFloor(1)}>1层</Radio.Button>
-              <Radio.Button value={2} onClick={() => setCurrentFloor(2)}>2层</Radio.Button>
-              <Radio.Button value={3} onClick={() => setCurrentFloor(3)}>3层</Radio.Button>
+              <Radio.Button value={1} onClick={() => { setCurrentFloor(1); clearHighlight(); }}>1层</Radio.Button>
+              <Radio.Button value={2} onClick={() => { setCurrentFloor(2); clearHighlight(); }}>2层</Radio.Button>
+              <Radio.Button value={3} onClick={() => { setCurrentFloor(3); clearHighlight(); }}>3层</Radio.Button>
             </Radio.Group>
           </Space>
         }
@@ -214,7 +508,7 @@ const ParkingMap: React.FC = () => {
             <span>类型筛选:</span>
             <Select
               value={filterType}
-              onChange={(value) => setFilterType(value)}
+              onChange={(value) => { setFilterType(value); clearHighlight(); }}
               style={{ width: 120 }}
             >
               <Option value="all">全部</Option>
@@ -223,6 +517,18 @@ const ParkingMap: React.FC = () => {
               <Option value="vip">VIP</Option>
               <Option value="charging">充电桩</Option>
             </Select>
+            {highlightPath.size > 0 && (
+              <Button size="small" onClick={clearHighlight}>
+                清除高亮
+              </Button>
+            )}
+            <Button
+              type="primary"
+              icon={<ThunderboltOutlined />}
+              onClick={() => setGuidanceModalVisible(true)}
+            >
+              智能入场引导
+            </Button>
           </Space>
         }
       >
@@ -255,6 +561,14 @@ const ParkingMap: React.FC = () => {
             <div className="legend-color" style={{ background: '#fff', border: '2px solid #13c2c2' }}></div>
             <span>⚡ 充电桩</span>
           </div>
+          <div className="legend-item">
+            <div className="legend-color" style={{ background: '#9254de' }}></div>
+            <span>🛤️ 推荐路径</span>
+          </div>
+          <div className="legend-item">
+            <div className="legend-color" style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}></div>
+            <span>⭐ 推荐车位</span>
+          </div>
         </div>
 
         <div
@@ -262,19 +576,76 @@ const ParkingMap: React.FC = () => {
           style={{
             ...gridStyle,
             justifyItems: 'center',
-            alignItems: 'center'
+            alignItems: 'center',
+            position: 'relative'
           }}
         >
-          {filteredSpaces.map(space => (
-            <div
-              key={space.id}
-              className={`space-item space-${space.status} space-${space.type}`}
-              style={getSpaceItemStyle(space)}
-              onClick={() => handleSpaceClick(space)}
-            >
-              {space.spaceNo.split('-')[1]}
-            </div>
-          ))}
+          {filteredSpaces.map(space => {
+            const isPath = isPathCell(space.row, space.col);
+            const isRecommended = isRecommendedSpace(space.id);
+            return (
+              <div
+                key={space.id}
+                className={getSpaceClass(space)}
+                style={{
+                  ...getSpaceItemStyle(space),
+                  position: 'relative',
+                  boxShadow: isRecommended ? '0 0 20px rgba(102, 126, 234, 0.6)' :
+                             isPath ? '0 0 15px rgba(146, 84, 222, 0.5)' : 'none',
+                  zIndex: isRecommended ? 10 : isPath ? 5 : 1
+                }}
+                onClick={() => handleSpaceClick(space)}
+              >
+                {space.spaceNo.split('-')[1]}
+                {isRecommended && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: -8,
+                      right: -8,
+                      background: '#faad14',
+                      color: '#fff',
+                      fontSize: 10,
+                      padding: '2px 6px',
+                      borderRadius: 10,
+                      fontWeight: 600
+                    }}
+                  >
+                    推荐
+                  </div>
+                )}
+              </div>
+            );
+          })}
+
+          {Array.from(highlightPath).map(key => {
+            const [row, col] = key.split('-').map(Number);
+            const hasSpace = filteredSpaces.some(s => s.row === row && s.col === col);
+            if (hasSpace) return null;
+
+            return (
+              <div
+                key={`path-${key}`}
+                style={{
+                  gridColumn: col + 1,
+                  gridRow: row + 1,
+                  width: '60px',
+                  height: '30px',
+                  background: 'rgba(146, 84, 222, 0.3)',
+                  border: '2px dashed #9254de',
+                  borderRadius: '4px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '12px',
+                  color: '#9254de',
+                  fontWeight: 600
+                }}
+              >
+                →
+              </div>
+            );
+          })}
         </div>
       </Card>
 
@@ -283,6 +654,19 @@ const ParkingMap: React.FC = () => {
         open={modalVisible}
         onCancel={() => setModalVisible(false)}
         footer={[
+          selectedSpace?.status === 'available' && (
+            <Button
+              key="guidance"
+              type="primary"
+              icon={<ArrowRightOutlined />}
+              onClick={() => {
+                handleShowPath(selectedSpace!);
+                setModalVisible(false);
+              }}
+            >
+              显示路线
+            </Button>
+          ),
           <Button key="close" onClick={() => setModalVisible(false)}>
             关闭
           </Button>
@@ -339,6 +723,26 @@ const ParkingMap: React.FC = () => {
             </p>
           </Card>
         )}
+      </Modal>
+
+      <Modal
+        title={
+          <Space>
+            <ThunderboltOutlined style={{ color: '#1890ff' }} />
+            <span>智能车位引导</span>
+          </Space>
+        }
+        open={guidanceModalVisible}
+        onCancel={resetGuidance}
+        footer={null}
+        width={600}
+      >
+        <Steps current={entryStep} style={{ marginBottom: 24 }}>
+          <Step title="输入信息" />
+          <Step title="获得推荐" />
+          <Step title="完成入场" />
+        </Steps>
+        {renderGuidanceSteps()}
       </Modal>
     </div>
   );

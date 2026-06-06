@@ -5,6 +5,12 @@ export type PaymentType = 'cash' | 'wechat' | 'alipay' | 'card' | 'prepaid';
 export type RecordStatus = 'parking' | 'completed' | 'reserved';
 export type ReservationStatus = 'pending' | 'active' | 'completed' | 'cancelled' | 'expired';
 
+export type InvoiceStatus = 'pending' | 'issued' | 'failed';
+export type InvoiceType = 'personal' | 'company';
+export type ViolationType = 'cross_parking' | 'overtime' | 'disabled_occupied' | 'speeding' | 'wrong_direction';
+export type BlacklistStatus = 'active' | 'removed';
+export type ViolationStatus = 'pending' | 'processed' | 'appealed';
+
 export interface ParkingConfig {
   id: number;
   totalSpaces: number;
@@ -133,4 +139,72 @@ export interface ApiResponse<T = any> {
   data?: T;
   message?: string;
   error?: string;
+}
+
+export interface Invoice {
+  id: number;
+  recordId: number;
+  plateNo: string;
+  invoiceNo: string;
+  amount: number;
+  invoiceType: InvoiceType;
+  title: string;
+  taxNo: string | null;
+  email: string;
+  status: InvoiceStatus;
+  parkingDetail: string;
+  issuedAt: string | null;
+  createdAt: string;
+}
+
+export interface InvoiceMonthlyStat {
+  month: string;
+  totalAmount: number;
+  totalCount: number;
+}
+
+export interface GuidanceResult {
+  space: ParkingSpace;
+  floor: number;
+  zone: string;
+  spaceNo: string;
+  distance: number;
+  path: Array<{ row: number; col: number }>;
+  typePreference: SpaceType | null;
+}
+
+export interface ElevatorPosition {
+  id: number;
+  floor: number;
+  row: number;
+  col: number;
+  name: string;
+}
+
+export interface Violation {
+  id: number;
+  plateNo: string;
+  recordId: number | null;
+  violationType: ViolationType;
+  violationTypeName?: string;
+  description: string;
+  occurrenceTime: string;
+  status: ViolationStatus;
+  createdAt: string;
+}
+
+export interface Blacklist {
+  id: number;
+  plateNo: string;
+  reason: string;
+  violationCount: number;
+  status: BlacklistStatus;
+  addedAt: string;
+  removedAt: string | null;
+}
+
+export interface ViolationTypeStat {
+  type: ViolationType;
+  name: string;
+  count: number;
 }

@@ -5,6 +5,9 @@ import * as recordController from '../controllers/recordController';
 import * as reservationController from '../controllers/reservationController';
 import * as memberController from '../controllers/memberController';
 import * as statsController from '../controllers/statsController';
+import * as invoiceController from '../controllers/invoiceController';
+import * as guidanceController from '../controllers/guidanceController';
+import * as violationController from '../controllers/violationController';
 
 const router = Router();
 
@@ -43,5 +46,27 @@ router.get('/stats/payment-types', statsController.getPaymentTypeStats);
 router.get('/stats/peak-hours', statsController.getPeakHours);
 router.get('/stats/turnover', statsController.getSpaceTurnover);
 router.get('/stats/records', statsController.getParkingRecords);
+
+router.post('/invoices', invoiceController.createInvoice);
+router.get('/invoices', invoiceController.getInvoices);
+router.get('/invoices/monthly-stats', invoiceController.getMonthlyStats);
+router.get('/invoices/:id', invoiceController.getInvoiceById);
+router.get('/invoices/:id/html', invoiceController.getInvoiceHtml);
+router.post('/invoices/:id/resend', invoiceController.resendInvoice);
+
+router.get('/guidance/recommend', guidanceController.getRecommendedSpace);
+router.post('/guidance/entry', guidanceController.entryWithGuidance);
+router.get('/guidance/elevators', guidanceController.getElevatorPositions);
+router.get('/guidance/path/:spaceId', guidanceController.getGuidancePath);
+
+router.post('/violations', violationController.createViolation);
+router.get('/violations', violationController.getViolations);
+router.get('/violations/stats', violationController.getViolationStats);
+router.put('/violations/:id/status', violationController.updateViolationStatus);
+router.get('/violations/check/:plateNo', violationController.checkPlateBlacklist);
+
+router.get('/blacklist', violationController.getBlacklist);
+router.post('/blacklist', violationController.addToBlacklist);
+router.put('/blacklist/:id/remove', violationController.removeFromBlacklist);
 
 export default router;

@@ -1,5 +1,5 @@
 import dayjs from 'dayjs';
-import type { SpaceType, PaymentType, MemberType } from '../types';
+import type { SpaceType, PaymentType, MemberType, InvoiceStatus, InvoiceType, ViolationType, ViolationStatus, BlacklistStatus } from '../types';
 
 export const spaceTypeMap: Record<SpaceType, string> = {
   normal: '普通车位',
@@ -47,6 +47,53 @@ export const recordStatusMap: Record<string, string> = {
   parking: '停车中',
   completed: '已完成',
   reserved: '已预约'
+};
+
+export const invoiceStatusMap: Record<InvoiceStatus, string> = {
+  pending: '待开具',
+  issued: '已开具',
+  failed: '开具失败'
+};
+
+export const invoiceStatusColorMap: Record<InvoiceStatus, string> = {
+  pending: '#faad14',
+  issued: '#52c41a',
+  failed: '#f5222d'
+};
+
+export const invoiceTypeMap: Record<InvoiceType, string> = {
+  personal: '个人发票',
+  company: '企业发票'
+};
+
+export const violationTypeMap: Record<ViolationType, string> = {
+  cross_parking: '跨位停车',
+  overtime: '超时未离场',
+  disabled_occupied: '占用残疾人车位',
+  speeding: '超速行驶',
+  wrong_direction: '逆向行驶'
+};
+
+export const violationStatusMap: Record<ViolationStatus, string> = {
+  pending: '待处理',
+  processed: '已处理',
+  appealed: '已申诉'
+};
+
+export const violationStatusColorMap: Record<ViolationStatus, string> = {
+  pending: '#faad14',
+  processed: '#52c41a',
+  appealed: '#1890ff'
+};
+
+export const blacklistStatusMap: Record<BlacklistStatus, string> = {
+  active: '已拉黑',
+  removed: '已移除'
+};
+
+export const blacklistStatusColorMap: Record<BlacklistStatus, string> = {
+  active: '#f5222d',
+  removed: '#8c8c8c'
 };
 
 export function formatDuration(minutes: number): string {

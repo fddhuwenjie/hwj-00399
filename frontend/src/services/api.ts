@@ -10,7 +10,17 @@ import type {
   PaymentTypeStat,
   PeakHourItem,
   TurnoverItem,
-  ApiResponse
+  ApiResponse,
+  Invoice,
+  InvoiceMonthlyStat,
+  GuidanceResult,
+  ElevatorPosition,
+  Violation,
+  Blacklist,
+  ViolationTypeStat,
+  InvoiceType,
+  ViolationType,
+  ViolationStatus
 } from '../types';
 
 const api = axios.create({
@@ -84,4 +94,45 @@ export const statsApi = {
   getTurnover: (days?: number) => api.get<ApiResponse<TurnoverItem[]>>('/stats/turnover', { params: { days } }).then(r => r.data),
   getRecords: (params?: { startDate?: string; endDate?: string; plateNo?: string; page?: number; pageSize?: number }) =>
     api.get<ApiResponse<{ records: ParkingRecord[]; total: number; page: number; pageSize: number }>>('/stats/records', { params }).then(r => r.data)
+};
+
+export const invoiceApi = {
+  create: (data: { recordId: number; invoiceType: InvoiceType; title: string; taxNo?: string; email: string }) =>
+    api.post<ApiResponse<Invoice>>('/invoices', data).then(r => r.data),
+  getList: (params?: { plateNo?: string; status?: string; page?: number; pageSize?: number; startDate?: string; endDate?: string }) =>
+    api.get<ApiResponse<{ invoices: Invoice[]; total: number; page: number; pageSize: number }>>('/invoices', { params }).then(r => r.data),
+  getById: (id: number) => api.get<ApiResponse<Invoice>>(`/invoices/${id}`).then(r => r.data),
+  getHtml: (id: number) => api.get(`/invoices/${id}/html`, { responseType: 'text' }).then(r => r.data),
+  getMonthlyStats: (year?: number) =>
+    api.get<ApiResponse<{ monthlyStats: InvoiceMonthlyStat[]; yearTotal: { totalAmount: number; totalCount: number } }>>('/invoices/monthly-stats', { params: { year } }).then(r => r.data),
+  resend: (id: number) => api.post<ApiResponse>(`/invoices/${id}/resend`).then(r => r.data)
+};
+
+export const guidanceApi = {
+  recommend: (params?: { plateNo?: string; typePreference?: string; floor?: number }) =>
+    api.get<ApiResponse<GuidanceResult>>('/guidance/recommend', { params }).then(r => r.data),
+  entry: (data: { plateNo?: string; spaceId?: number; typePreference?: string; manual?: boolean }) =>
+    api.post<ApiResponse<{ record: ParkingRecord; member?: Member; manual: boolean; guidance: GuidanceResult }>>('/guidance/entry', data).then(r => r.data),
+  getElevators: (floor?: number) => api.get<ApiResponse<ElevatorPosition[]>>('/guidance/elevators', { params: { floor } }).then(r => r.data),
+  getPath: (spaceId: number) =>
+    api.get<ApiResponse<{ space: ParkingSpace; elevator: ElevatorPosition; path: Array<{ row: number; col: number }>; zone: string; distance: number }>>(`/guidance/path/${spaceId}`).then(r => r.data)
+};
+
+export const violationApi = {
+  create: (data: { plateNo: string; recordId?: number; violationType: ViolationType; description?: string; occurrenceTime?: string }) =>
+    api.post<ApiResponse<{ violation: Violation; violationCount: number; addedToBlacklist: boolean; message: string }>>('/violations', data).then(r => r.data),
+  getList: (params?: { plateNo?: string; violationType?: string; status?: string; page?: number; pageSize?: number; startDate?: string; endDate?: string }) =>
+    api.get<ApiResponse<{ violations: Violation[]; total: number; page: number; pageSize: number }>>('/violations', { params }).then(r => r.data),
+  getStats: (params?: { startDate?: string; endDate?: string }) =>
+    api.get<ApiResponse<{ byType: ViolationTypeStat[]; totalCount: number }>>('/violations/stats', { params }).then(r => r.data),
+  updateStatus: (id: number, status: ViolationStatus) =>
+    api.put<ApiResponse<Violation>>(`/violations/${id}/status`, { status }).then(r => r.data),
+  checkPlate: (plateNo: string) =>
+    api.get<ApiResponse<{ isBlacklisted: boolean; blacklist?: Blacklist; recentViolations: Violation[]; totalViolations: number }>>(`/violations/check/${plateNo}`).then(r => r.data),
+  getBlacklist: (params?: { plateNo?: string; status?: string; page?: number; pageSize?: number }) =>
+    api.get<ApiResponse<{ blacklist: Blacklist[]; total: number; page: number; pageSize: number }>>('/blacklist', { params }).then(r => r.data),
+  addToBlacklist: (data: { plateNo: string; reason?: string }) =>
+    api.post<ApiResponse<Blacklist>>('/blacklist', data).then(r => r.data),
+  removeFromBlacklist: (id: number, reason?: string) =>
+    api.put<ApiResponse<Blacklist>>(`/blacklist/${id}/remove`, { reason }).then(r => r.data)
 };

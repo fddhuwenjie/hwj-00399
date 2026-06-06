@@ -112,3 +112,68 @@ export function formatDuration(minutes: number): string {
   }
   return `${mins}分钟`;
 }
+
+export function generateInvoiceNo(): string {
+  const now = dayjs();
+  const timestamp = now.format('YYYYMMDDHHmmss');
+  const random = Math.random().toString(36).substring(2, 8).toUpperCase();
+  return `INV${timestamp}${random}`;
+}
+
+export function calculateDistance(
+  row1: number, col1: number,
+  row2: number, col2: number
+): number {
+  return Math.abs(row1 - row2) + Math.abs(col1 - col2);
+}
+
+export function calculatePath(
+  startRow: number, startCol: number,
+  endRow: number, endCol: number
+): Array<{ row: number; col: number }> {
+  const path: Array<{ row: number; col: number }> = [];
+  let currentRow = startRow;
+  let currentCol = startCol;
+
+  while (currentRow !== endRow) {
+    currentRow += currentRow < endRow ? 1 : -1;
+    path.push({ row: currentRow, col: currentCol });
+  }
+
+  while (currentCol !== endCol) {
+    currentCol += currentCol < endCol ? 1 : -1;
+    path.push({ row: currentRow, col: currentCol });
+  }
+
+  return path;
+}
+
+export function getZoneName(row: number, col: number, cols: number): string {
+  const zones = ['A区', 'B区', 'C区', 'D区', 'E区'];
+  const zoneIndex = Math.floor((col + row * cols) / 10) % zones.length;
+  return zones[zoneIndex];
+}
+
+export const violationTypeMap: Record<string, string> = {
+  cross_parking: '跨位停车',
+  overtime: '超时未离场',
+  disabled_occupied: '占用残疾人车位',
+  speeding: '超速行驶',
+  wrong_direction: '逆向行驶'
+};
+
+export async function checkBlacklist(plateNo: string): Promise<boolean> {
+  const result = await get<{ count: number }>(
+    'SELECT COUNT(*) as count FROM blacklist WHERE plateNo = ? AND status = ?',
+    [plateNo, 'active']
+  );
+  return result ? result.count > 0 : false;
+}
+
+export async function getViolationCount(plateNo: string): Promise<number> {
+  const result = await get<{ count: number }>(
+    'SELECT COUNT(*) as count FROM violations WHERE plateNo = ?',
+    [plateNo]
+  );
+  return result ? result.count : 0;
+}

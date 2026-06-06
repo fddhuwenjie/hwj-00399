@@ -7,6 +7,8 @@ import VehicleManagement from '../pages/VehicleManagement';
 import Reservation from '../pages/Reservation';
 import MemberManagement from '../pages/MemberManagement';
 import Statistics from '../pages/Statistics';
+import InvoiceManagement from '../pages/InvoiceManagement';
+import ViolationManagement from '../pages/ViolationManagement';
 
 const routes: RouteObject[] = [
   {
@@ -19,7 +21,9 @@ const routes: RouteObject[] = [
       { path: 'vehicle', element: <VehicleManagement /> },
       { path: 'reservation', element: <Reservation /> },
       { path: 'members', element: <MemberManagement /> },
-      { path: 'statistics', element: <Statistics /> }
+      { path: 'statistics', element: <Statistics /> },
+      { path: 'invoices', element: <InvoiceManagement /> },
+      { path: 'violations', element: <ViolationManagement /> }
     ]
   }
 ];

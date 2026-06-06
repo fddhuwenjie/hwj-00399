@@ -129,6 +129,51 @@ export async function initDatabase() {
       createdAt TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS invoices (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      recordId INTEGER NOT NULL,
+      plateNo TEXT NOT NULL,
+      invoiceNo TEXT NOT NULL UNIQUE,
+      amount REAL NOT NULL,
+      invoiceType TEXT NOT NULL DEFAULT 'personal',
+      title TEXT NOT NULL,
+      taxNo TEXT,
+      email TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      parkingDetail TEXT NOT NULL,
+      issuedAt TEXT,
+      createdAt TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS blacklist (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      plateNo TEXT NOT NULL UNIQUE,
+      reason TEXT NOT NULL,
+      violationCount INTEGER NOT NULL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'active',
+      addedAt TEXT NOT NULL,
+      removedAt TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS violations (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      plateNo TEXT NOT NULL,
+      recordId INTEGER,
+      violationType TEXT NOT NULL,
+      description TEXT NOT NULL,
+      occurrenceTime TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      createdAt TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS elevator_positions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      floor INTEGER NOT NULL,
+      row INTEGER NOT NULL,
+      col INTEGER NOT NULL,
+      name TEXT NOT NULL
+    );
+
     CREATE INDEX IF NOT EXISTS idx_records_plate ON parking_records(plateNo);
     CREATE INDEX IF NOT EXISTS idx_records_status ON parking_records(status);
     CREATE INDEX IF NOT EXISTS idx_records_entry ON parking_records(entryTime);
@@ -136,6 +181,15 @@ export async function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_reservations_date ON reservations(reserveDate);
     CREATE INDEX IF NOT EXISTS idx_members_status ON members(status);
     CREATE INDEX IF NOT EXISTS idx_payments_created ON payments(createdAt);
+    CREATE INDEX IF NOT EXISTS idx_invoices_record ON invoices(recordId);
+    CREATE INDEX IF NOT EXISTS idx_invoices_plate ON invoices(plateNo);
+    CREATE INDEX IF NOT EXISTS idx_invoices_status ON invoices(status);
+    CREATE INDEX IF NOT EXISTS idx_invoices_created ON invoices(createdAt);
+    CREATE INDEX IF NOT EXISTS idx_violations_plate ON violations(plateNo);
+    CREATE INDEX IF NOT EXISTS idx_violations_type ON violations(violationType);
+    CREATE INDEX IF NOT EXISTS idx_violations_time ON violations(occurrenceTime);
+    CREATE INDEX IF NOT EXISTS idx_blacklist_status ON blacklist(status);
+    CREATE INDEX IF NOT EXISTS idx_blacklist_plate ON blacklist(plateNo);
   `);
 
   const configCount = await get<{ count: number }>('SELECT COUNT(*) as count FROM parking_config');
@@ -149,6 +203,23 @@ export async function initDatabase() {
   const spaceCount = await get<{ count: number }>('SELECT COUNT(*) as count FROM parking_spaces');
   if (!spaceCount || spaceCount.count === 0) {
     await generateParkingSpaces();
+  }
+
+  const elevatorCount = await get<{ count: number }>('SELECT COUNT(*) as count FROM elevator_positions');
+  if (!elevatorCount || elevatorCount.count === 0) {
+    await initElevatorPositions();
+  }
+}
+
+async function initElevatorPositions() {
+  const config = await get<{ floors: number }>('SELECT floors FROM parking_config WHERE id = 1');
+  if (!config) return;
+
+  for (let floor = 1; floor <= config.floors; floor++) {
+    await run(
+      'INSERT INTO elevator_positions (floor, row, col, name) VALUES (?, ?, ?, ?)',
+      [floor, 0, 0, `B${floor}层主电梯`]
+    );
   }
 }
 

@@ -9,6 +9,9 @@ import {
   BarChartOutlined,
   MenuUnfoldOutlined,
   MenuFoldOutlined,
+  FileTextOutlined,
+  WarningOutlined,
+  ThunderboltOutlined
 } from '@ant-design/icons';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
@@ -61,6 +64,16 @@ const AppLayout = () => {
       key: '/statistics',
       icon: <BarChartOutlined />,
       label: '收入统计',
+    },
+    {
+      key: '/invoices',
+      icon: <FileTextOutlined />,
+      label: '电子发票',
+    },
+    {
+      key: '/violations',
+      icon: <WarningOutlined />,
+      label: '违章管理',
     },
   ];
 
